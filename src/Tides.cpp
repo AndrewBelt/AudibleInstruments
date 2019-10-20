@@ -67,21 +67,31 @@ struct Tides : Module {
 	}
 
 	void process(const ProcessArgs &args) override {
+		// Modes are AD/Loop/ASR [tides/generator.h]
 		tides::GeneratorMode mode = generator.mode();
 		if (modeTrigger.process(params[MODE_PARAM].getValue())) {
-			mode = (tides::GeneratorMode) (((int)mode - 1 + 3) % 3);
-			generator.set_mode(mode);
+		  mode = (tides::GeneratorMode)(((int)mode - 1 + 3) % 3);
+		    generator.set_mode(mode);
 		}
-		lights[MODE_GREEN_LIGHT].value = (mode == 2) ? 1.0 : 0.0;
-		lights[MODE_RED_LIGHT].value = (mode == 0) ? 1.0 : 0.0;
+		// AD Mode 
+		lights[MODE_GREEN_LIGHT].value = (mode == 0) ? 1.0 : 0.0;
+		lights[MODE_GREEN_LIGHT].value = (mode == 2) ? 0.0 : 1.0;
+		// ASR Mode 
+		lights[MODE_RED_LIGHT].value = (mode == 2) ? 1.0 : 0.0;
+		lights[MODE_RED_LIGHT].value = (mode == 0) ? 0.0 : 1.0;
 
+		// Ranges are High/Med/Low [tides/generator.h] 
 		tides::GeneratorRange range = generator.range();
 		if (rangeTrigger.process(params[RANGE_PARAM].getValue())) {
-			range = (tides::GeneratorRange) (((int)range - 1 + 3) % 3);
-			generator.set_range(range);
+		  range = (tides::GeneratorRange)(((int)range - 1 + 3) % 3);
+		  generator.set_range(range);
 		}
+		// Low Range 
 		lights[RANGE_GREEN_LIGHT].value = (range == 2) ? 1.0 : 0.0;
+		lights[RANGE_GREEN_LIGHT].value = (range == 0) ? 0.0 : 1.0;
+		// High Range 
 		lights[RANGE_RED_LIGHT].value = (range == 0) ? 1.0 : 0.0;
+		lights[RANGE_RED_LIGHT].value = (range == 2) ? 0.0 : 1.0;
 
 		// Buffer loop
 		if (++frame >= 16) {
