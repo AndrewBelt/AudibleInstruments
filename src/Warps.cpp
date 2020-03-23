@@ -31,12 +31,25 @@ struct Warps : Module {
 		NUM_LIGHTS = ALGORITHM_LIGHT + 3
 	};
 
-
 	int frame = 0;
 	warps::Modulator modulator;
 	warps::ShortFrame inputFrames[60] = {};
 	warps::ShortFrame outputFrames[60] = {};
 	dsp::SchmittTrigger stateTrigger;
+	
+	// Taken from eurorack\warps\ui.cc
+	const uint8_t palette_[10][3] = {
+		{ 0, 192, 64 },
+		{ 64, 255, 0 },
+		{ 255, 255, 0 },
+		{ 255, 64, 0 },
+		{ 255, 0, 0 },
+		{ 255, 0, 64 },
+		{ 255, 0, 255 },
+		{ 0, 0, 255 },
+		{ 0, 255, 192 },
+		{ 0, 255, 192 },
+	};
 
 	Warps() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -68,12 +81,20 @@ struct Warps : Module {
 			p->modulation_algorithm = clamp(params[ALGORITHM_PARAM].getValue() / 8.0f + inputs[ALGORITHM_INPUT].getVoltage() / 5.0f, 0.0f, 1.0f);
 
 			{
-				// TODO
-				// Use the correct light color
-				NVGcolor algorithmColor = nvgHSL(p->modulation_algorithm, 0.3, 0.4);
-				lights[ALGORITHM_LIGHT + 0].setBrightness(algorithmColor.r);
-				lights[ALGORITHM_LIGHT + 1].setBrightness(algorithmColor.g);
-				lights[ALGORITHM_LIGHT + 2].setBrightness(algorithmColor.b);
+				// Taken from eurorack\warps\ui.cc
+				const uint8_t (*palette)[3];
+				palette = palette_;
+				uint8_t rgb[3];
+        		float zone = p->modulation_algorithm;
+        		zone *= 8.0f;
+		        MAKE_INTEGRAL_FRACTIONAL(zone);
+		        int32_t zone_fractional_i = static_cast<int32_t>(zone_fractional * 256.0f);
+		        for (int32_t i = 0; i < 3; ++i) {
+				    int32_t a = palette[zone_integral][i];
+				    int32_t b = palette[zone_integral + 1][i];
+				    rgb[i] = a + ((b - a) * zone_fractional_i >> 8);
+					lights[ALGORITHM_LIGHT + i].setBrightness(rgb[i]);
+		        }
 			}
 
 			p->modulation_parameter = clamp(params[TIMBRE_PARAM].getValue() + inputs[TIMBRE_INPUT].getVoltage() / 5.0f, 0.0f, 1.0f);
