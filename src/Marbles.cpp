@@ -210,7 +210,8 @@ struct Marbles : Module {
 	int x_scale;
 	int y_divider_index;
 	int x_clock_source_internal;
-
+	float _gate_len=0.5f;
+	float _gate_len_dev = 0.0f;
 	// Buffers
 	stmlib::GateFlags t_clocks[BLOCK_SIZE] = {};
 	stmlib::GateFlags last_t_clock = 0;
@@ -292,7 +293,8 @@ struct Marbles : Module {
 		json_object_set_new(rootJ, "x_scale", json_integer(x_scale));
 		json_object_set_new(rootJ, "y_divider_index", json_integer(y_divider_index));
 		json_object_set_new(rootJ, "x_clock_source_internal", json_integer(x_clock_source_internal));
-
+		json_object_set_new(rootJ, "gate_length", json_real(_gate_len));
+		json_object_set_new(rootJ, "gate_length_dev", json_real(_gate_len_dev));
 		return rootJ;
 	}
 
@@ -336,6 +338,13 @@ struct Marbles : Module {
 		json_t* x_clock_source_internalJ = json_object_get(rootJ, "x_clock_source_internal");
 		if (x_clock_source_internalJ)
 			x_clock_source_internal = json_integer_value(x_clock_source_internalJ);
+		
+		json_t *gatelenJ = json_object_get(rootJ, "gate_length");
+		if (gatelenJ)
+			_gate_len = json_real_value(gatelenJ);
+		json_t *gatelendevJ = json_object_get(rootJ, "gate_length_dev");
+		if (gatelendevJ)
+			_gate_len_dev = json_real_value(gatelendevJ);
 	}
 
 	void process(const ProcessArgs& args) override {
@@ -450,9 +459,9 @@ struct Marbles : Module {
 		t_generator.set_jitter(t_jitter);
 		t_generator.set_deja_vu(t_deja_vu ? deja_vu : 0.f);
 		t_generator.set_length(deja_vu_length);
-		// TODO
-		t_generator.set_pulse_width_mean(0.f);
-		t_generator.set_pulse_width_std(0.f);
+		
+		t_generator.set_pulse_width_mean(_gate_len);
+		t_generator.set_pulse_width_std(_gate_len_dev);
 
 		t_generator.Process(t_external_clock, t_clocks, ramps, gates, BLOCK_SIZE);
 
@@ -676,6 +685,84 @@ struct MarblesWidget : ModuleWidget {
 		YDividerItem* yDividerItem = createMenuItem<YDividerItem>("Y divider ratio");
 		yDividerItem->module = module;
 		menu->addChild(yDividerItem);
+
+		struct GateLenMenuIndexItem : MenuItem {
+			Marbles *module = nullptr;
+			float source=0.0f;
+			void onAction(const event::Action &e) override {
+				module->_gate_len = source;
+			}
+		};
+
+		struct GateLenMenuItem : MenuItem
+		{
+			Marbles* module = nullptr;
+			Menu *createChildMenu() override {
+				Menu *submenu = new Menu();
+				const std::pair<std::string,float> gateLens[] = {
+				{"1%",0.01f},
+				{"10%",0.1f},
+				{"25%",0.25f},
+				{"50%",0.5f},
+				{"75%",0.75f},
+				{"90%",0.9f},
+				{"99%",0.99f}
+				};
+				for (int i = 0; i < (int) LENGTHOF(gateLens); i++) {
+                    float scaled_len = rescale(module->_gate_len,0.0f,1.0f, 0.01f,0.99f);
+                    bool checked = isNear(gateLens[i].second,scaled_len,0.0001);
+					GateLenMenuIndexItem *item = createMenuItem<GateLenMenuIndexItem>(gateLens[i].first,
+			 		CHECKMARK(checked));
+					item->module = module;
+					// The marbles code wants the parameter to be in range 0.0-1.0
+					item->source = rescale(gateLens[i].second,0.01f,0.99f,0.0f,1.0f);
+					submenu->addChild(item);
+				}
+				return submenu;
+			}
+		};
+
+		menu->addChild(new MenuEntry);
+		GateLenMenuItem* glitem = createMenuItem<GateLenMenuItem>("Gate length");
+		glitem->module = module;
+		menu->addChild(glitem);
+		
+		struct GateLenDevMenuIndexItem : MenuItem {
+			Marbles *module = nullptr;
+			float source=0.0f;
+			void onAction(const event::Action &e) override {
+				module->_gate_len_dev = source;
+			}
+		};
+
+		struct GateLenDevMenuItem : MenuItem
+		{
+			Marbles* module = nullptr;
+			Menu *createChildMenu() override {
+				Menu *submenu = new Menu();
+				const std::pair<std::string,float> gateLenDevs[] = {
+					{"None",0.00f},
+					{"Small",0.1f},
+					{"Medium",0.5f},
+					{"Large",0.9f}
+				};
+				for (int i = 0; i < (int) LENGTHOF(gateLenDevs); i++) {
+					bool checked = isNear(gateLenDevs[i].second,module->_gate_len_dev,0.0001);
+					GateLenDevMenuIndexItem *item = createMenuItem<GateLenDevMenuIndexItem>(gateLenDevs[i].first,
+			 		CHECKMARK(checked));
+					item->module = module;
+					item->source = gateLenDevs[i].second;
+					submenu->addChild(item);
+				}
+				return submenu;
+			}
+		};
+
+		menu->addChild(new MenuEntry);
+		GateLenDevMenuItem* glditem = createMenuItem<GateLenDevMenuItem>("Gate length randomization");
+		glditem->module = module;
+		menu->addChild(glditem);
+
 	}
 };
 
